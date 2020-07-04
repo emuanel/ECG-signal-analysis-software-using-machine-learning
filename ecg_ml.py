@@ -122,22 +122,33 @@ def fragmentation(data):
     return [P,QRS,T]
 
 waves= fragmentation(data)
-images(waves)
+
 
 def images(waves):   
-    path='D:\Jasiu\Dokumenty\studia\inzynierka\project\images\'     
+    path='D:\\Jasiu\\Dokumenty\\studia\\inzynierka\\project\\images\\'     
+    j=0
     for i in waves[0]:
-        fig = plt.figure(
+        fig = plt.figure()
         plt.plot(i)
-        plt.savefig(path+'P\{}'.format(i))
+        plt.axis('off')
+        plt.savefig(path+'P\{}.png'.format(j))
         plt.close(fig)
+        j=j+1
+    j=0
     for i in waves[1]:
-        fig = plt.figure(
+        fig = plt.figure()
         plt.plot(i)
-        plt.savefig(path+'QRS\{}'.format(i))
+        plt.axis('off')
+        plt.savefig(path+'QRS\{}.png'.format(j))
         plt.close(fig)
+        j=j+1
+    j=0
     for i in waves[2]:
-        fig = plt.figure(
+        fig = plt.figure()
         plt.plot(i)
-        plt.savefig(path+'T\{}'.format(i))
+        plt.axis('off')
+        plt.savefig(path+'T\{}.png'.format(j))
         plt.close(fig)
+        j=j+1
+images(waves)
+print(j)
