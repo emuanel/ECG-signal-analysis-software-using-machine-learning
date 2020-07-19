@@ -1,12 +1,12 @@
 """## Setup"""
-
 import wfdb
-import math
 import glob
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-import matplotlib.image as mpimg
+import cv2
+from PyQt5.QtWidgets import QApplication
+import sys
 """## Utils"""
 
 path='D:\Jasiu\Dokumenty\studia\inzynierka\project\qt-database-1.0.0\\'
@@ -106,67 +106,174 @@ def smooth(x,window_len=11,window='hanning'):
 for i in data:
     i = (smooth(i[0]), i[1])
 
-for i in range(0, len(data)):
-    plotecg(data[i][0],data[i][1])
-    plt.close()
-    
+# for i in range(0, len(data)):
+#     plotecg(data[i][0],data[i][1])
+#     plt.close()
+
 def fragmentation(data):
     signals = []
     booler = True
-    stop=0
-    start=0
-    indeStop=0
-    indeStart=0
-    
+    stop = 0
+    start = 0
+    indeStop = 0
+    indeStart = 0
+
     for i in data:
-         signal = i[0]
-         features = i[1].reset_index()
-         for  inde, index, symbol in zip(features.index, features['index'], features['symbol']):
-             
-             if (symbol == 'p' and booler == False):
-                 indeStop = previousInde
-                 stop = previousIndex
-                 if(start<stop):
-                     signals.append((signal[start:stop],features[indeStart:indeStop]))
-                 booler=True
-             if (symbol == 'p' and booler==True):
-                 start = previousIndex
-                 indeStart = previousInde
-                 booler =False
-             
-             previousInde=inde
-             previousIndex=index
-             previousSymbol = symbol
+        signal = i[0]
+        features = i[1].reset_index()
+        for inde, index, symbol in zip(features.index, features['index'], features['symbol']):
+  
+            if (symbol == 'p' and booler == False):
+                indeStop = previousInde
+                stop = previousIndex
+                
+                if (start < stop):
+                    annotation=features[indeStart:indeStop]
+                    
+                    for i in annotation['index']: 
+                        
+                        x = i-start
+                        annotation['index'].replace(i,x,inplace=True)
+                        
+                    signals.append((signal[start:stop], annotation))
+                    
+                booler = True
+            if (symbol == 'p' and booler == True):
+                start = previousIndex
+                indeStart = previousInde
+    
+                booler = False
+    
+            previousInde = inde
+            previousIndex = index
+            previousSymbol = symbol
+                
 
-    return signals        
+    return signals
 
-signals=fragmentation(data)
+signals = fragmentation(data[:])
 
 for i in range(len(signals)-1, 0 , -1):
     if signals[i][0].shape[0] >2000:
         signals.pop(i)
-        
-def EcgToImages(signals,path):
-    y=0
-    for i in signals:
-       fig = plt.figure()
-       plt.ylim(min(i[0]), max(i[0]))
-       plt.xlim(0, signals[y][0].shape[0])
-       plt.plot(i[0])
-       plt.axis('off')
-       fig.savefig(path+'\{}.png'.format(y))
-       plt.close(fig)       
-       y=y+1
 
-path='D:\Jasiu\Dokumenty\studia\inzynierka\project\images'
-# EcgToImages(signals,path)
+def EcgToImages():
+    y = 0
+    
+    app = QApplication(sys.argv)
+    screen = app.screens()[0]
+    dpi = screen.physicalDotsPerInch()
+    app.quit()
+
+    path = 'D:\Jasiu\Dokumenty\studia\inzynierka\project\images'
+    for i in signals:
+        fig = plt.figure(figsize=(640/dpi,480/dpi),dpi=dpi)
+        plt.ylim(min(i[0]), max(i[0]))
+        plt.xlim(0, signals[y][0].shape[0])
+        plt.plot(i[0])
+        plt.axis('off')
+        fig.savefig(path + '\{}.png'.format(y))
+        plt.close(fig)
+        y = y + 1
 
 def readImages():
-    img = []
-    images=glob.glob(path+"\*.png")
-    for i in images: 
-        img.append(mpimg.imread(i))
-    return img
+    images = glob.glob('D:\Jasiu\Dokumenty\studia\inzynierka\project\images\*.png')
+    for i in range(len(images)):
+        yield cv2.imread('D:\Jasiu\Dokumenty\studia\inzynierka\project\images\{}.png'.format(i))
 
+# EcgToImages()
 images = readImages()
 
+
+
+def createBoxes(signals, img):
+    for i in signals:
+        img = next(images)
+        img2 = img[:, :, 0].reshape([img.shape[0], img.shape[1]])
+        for j in range(img.shape[1]):
+            if min(img2[:, img.shape[1] - 1 - j]) < 255:
+                max_right = img.shape[1] - j
+                break
+        for j in range(img.shape[1]):
+            if min(img2[:, j])< 255:
+                max_left = j-1
+                break
+            
+        for j in range(img.shape[0]):
+            if min(img2[j, : ]) < 255:
+                max_top = j - 1
+                break
+        for j in range(img.shape[0]):
+            if min(img2[img.shape[0]-1-j, : ])< 255:
+                max_bot = img.shape[0]-j
+                break
+        max_x_pixels = max_right - max_left
+        max_y_pixels = max_bot - max_top
+        
+        signal_max_x = i[0].shape[0]
+        signal_max_y = abs(max(i[0]) - min(i[0]))
+        signal_max_y = signal_max_y[0]
+        
+        scale_X = max_x_pixels / signal_max_x
+        scale_Y = max_y_pixels / signal_max_y
+        
+        y = 0
+        
+        features = i[1] 
+        boolerP=False
+        boolerN=False
+        boolerT=False
+        for index, symbol in zip(features['index'], features['symbol']):
+            if boolerP == True:
+                x_wave_endP = index
+                boolerP=False
+            if symbol == 'p':
+                x_wave_beginP = previousIndex
+                boolerP=True
+            
+            if boolerN == True:
+                x_wave_endN= index
+                boolerN=False
+            if symbol == 'N':
+                x_wave_beginN = previousIndex
+                boolerN=True
+            
+            if boolerT == True:
+                x_wave_endT= index
+                boolerT=False
+            if symbol == 't':
+                x_wave_beginT = previousIndex
+                boolerT=True
+                
+            previousIndex = index
+        
+        y_wave_botP = min(i[0][x_wave_beginP:x_wave_endP])[0] - min(i[0])[0]
+        y_wave_topP = max(i[0][x_wave_beginP:x_wave_endP])[0] - min(i[0])[0]
+    
+        y_wave_botN = min(i[0][x_wave_beginN:x_wave_endN])[0] - min(i[0])[0]
+        y_wave_topN = max(i[0][x_wave_beginN:x_wave_endN])[0] - min(i[0])[0]
+        
+        y_wave_botT = min(i[0][x_wave_beginT:x_wave_endT])[0] - min(i[0])[0]
+        y_wave_topT = max(i[0][x_wave_beginT:x_wave_endT])[0] - min(i[0])[0]
+        
+        pt1P = (max_left + int(x_wave_endP * scale_X), max_bot - int(y_wave_topP * scale_Y)-2)
+        pt2P = (max_left + int(x_wave_beginP * scale_X), max_bot - int(y_wave_botP* scale_Y))
+        
+        pt1N = (max_left + int(x_wave_endN * scale_X), max_bot - int(y_wave_topN * scale_Y)-2)
+        pt2N = (max_left + int(x_wave_beginN * scale_X), max_bot - int(y_wave_botN* scale_Y))
+    
+        pt1T = (max_left + int(x_wave_endT * scale_X), max_bot -  int(y_wave_topT * scale_Y)-2)
+        pt2T = (max_left + int(x_wave_beginT * scale_X), max_bot -  int(y_wave_botT* scale_Y))
+        
+        img_box = cv2.rectangle(img, pt1P, pt2P, (255, 30, 30), thickness=1)
+        img_box = cv2.rectangle(img, pt1N, pt2N, (255, 30, 30), thickness=1)
+        img_box = cv2.rectangle(img, pt1T, pt2T, (255, 30, 30), thickness=1)
+        fig = plt.figure()
+
+        plt.imshow(img_box)
+        plt.axis('off')
+        plt.show()
+        plt.close()
+        
+
+createBoxes(signals[:],images)
