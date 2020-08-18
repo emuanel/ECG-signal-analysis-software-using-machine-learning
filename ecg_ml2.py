@@ -3,7 +3,7 @@ import wfdb
 import glob
 import matplotlib.pyplot as plt
 import pandas as pd
-
+import numpy as np
 """## Utils"""
 
 path1='D:\Jasiu\Dokumenty\studia\inzynierka\project\qt-database-1.0.0\\'
@@ -53,6 +53,81 @@ def Segmentation(records):
 
 data=Segmentation(records[:]) 
 
+def smooth(x,window_len=11,window='hanning'):
+    x = x.T[0]
+    if x.ndim != 1:
+        raise ValueError #"smooth only accepts 1 dimension arrays."
+
+    if x.size < window_len:
+        raise ValueError #"Input vector needs to be bigger than window size."
+
+
+    if window_len<3:
+        return x
+
+
+    if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
+        raise ValueError # "Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'"
+
+
+    s=np.r_[x[window_len-1:0:-1],x,x[-2:-window_len-1:-1]]
+    #print(len(s))
+    if window == 'flat': #moving average
+        w=np.ones(window_len,'d')
+    else:
+        w=eval('np.'+window+'(window_len)')
+
+    y=np.convolve(w/w.sum(),s,mode='valid')
+    return y
+
+for i in data:
+    i = (smooth(i[0]), i[1])
+
+def fragmentation(data):
+    signals = []
+    booler = True
+    stop = 0
+    start = 0
+    indeStop = 0
+    indeStart = 0
+
+    for i in data:
+        counter=0
+        signal = i[0]
+        features = i[1].reset_index()
+        for inde, index, symbol in zip(features.index, features['index'], features['symbol']):
+            
+            if (symbol == 'p' and booler == False):
+                counter=counter+1
+                if (counter%6==0):
+                    indeStop = previousInde
+                    stop = previousIndex
+                    
+                    if (start < stop):
+                        annotation=features[indeStart:indeStop]
+                        
+                        for i in annotation['index']: 
+                            
+                            x = i-start
+                            annotation['index'].replace(i,x,inplace=True)
+                            
+                        signals.append((signal[start:stop], annotation))
+                        
+                    booler = True
+            if (symbol == 'p' and booler == True):
+                start = previousIndex
+                indeStart = previousInde
+                counter=counter+1
+                booler = False
+    
+            previousInde = inde
+            previousIndex = index
+            previousSymbol = symbol
+                
+
+    return signals
+
+data = fragmentation(data[:])
 #częstość akcji serc, amplitudę zespołu QRS, oraz czasy trwania głównych załamków P i T
 #oraz zespołu QRS w dowolnym sygnale EKG.
 
@@ -107,7 +182,7 @@ def Labels(signals):
             
             
         if(len(Rpeaks) != 0):
-            labels.at[0,'heart rate']=sum(Rpeaks)/len(Rpeaks)
+            labels.at[0,'heart rate']=float(sum(Rpeaks)/len(Rpeaks))
         if(len(QRSamplitudes) != 0):
             labels.at[0,'QRS amplitude']=float(sum(QRSamplitudes)/len(QRSamplitudes))
         if(len(Plength) != 0):
@@ -116,12 +191,25 @@ def Labels(signals):
             labels.at[0,'T length']=sum(Tlength)/len(Tlength)
         if(len(QRSlength) != 0):
             labels.at[0,'QRS length']=sum(QRSlength)/len(QRSlength)
-            data.append((i[0],labels))
+        data.append((i[0],labels))
              
     return data
         
 
 data2 = Labels(data)
+
+for i in range(len(data2)-1, -1 , -1):
+    if data2[i][0].shape[0] >2000:
+        data2.pop(i)
+for i in range(len(data2)-1, -1 , -1):
+    if data2[i][1].at[0,'heart rate'] >0:
+        data2.pop(i)       
+        
+for i in data2:
+    print(len(i[0]))
+    plt.plot(i[0])
+    plt.show()
+
     
     
     
